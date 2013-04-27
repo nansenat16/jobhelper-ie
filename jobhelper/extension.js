@@ -176,13 +176,13 @@ var popup_function = function(rows, package_info){
     }
 	var content = "<div id='CompanyInfo' style='"+ie_info_patch+"max-height: 150px; overflow-y: scroll; overflow-x: hidden; background: #cc103f; bottom: 0; padding: 5px; text-align: left; z-index: 99999; font-size: 14.5px; line-height: 1.5; color: #fff; position: fixed'>"
 	    + "<div style='color:#f00;font-weight:bold;float:right;padding-right:8px;width:46px;'>"
-	    + "<span id='CompanyInfoClose' style='cursor:pointer;'>"+decodeURIComponent('%E9%97%9C%E9%96%89')+"</span></div>"                
+	    + "<span id='CompanyInfoClose' style='cursor:pointer;'>"+decodeURIComponent('%E9%97%9C%E9%96%89')+"</span><br /><a id='jobhelper_cc' href='http://jobhelper.g0v.ronny.tw/index/setpackage' target='_blank'>"+decodeURIComponent('%E8%A8%AD%E5%AE%9A')+"</a></div>"                
 	    + "<ol id='CompanyInfoMessage'></ol></div>";
 	document.body.innerHTML = content + document.body.innerHTML;
 	var close = document.getElementById('CompanyInfoClose');
 
     jQuery('#CompanyInfoClose').click(function(){jQuery('#CompanyInfo').css('display','none');});
-
+    add_cc();
     } else {
       document.getElementById('CompanyInfo').style.display = 'block';
     }
@@ -211,9 +211,10 @@ var show_info=function(msg){
         	msg=decodeURIComponent('%E7%9B%AE%E5%89%8D%E6%B2%92%E6%9C%89%E4%BB%BB%E4%BD%95%E7%B4%80%E9%8C%84%E3%80%82');
         }
 	    var content = "<div id='CompanyInfo' style='left:30px; max-height: 80px; overflow-y: hidden; overflow-x: hidden; background: #ccf; bottom: 0; padding: 5px; text-align: left; z-index: 99999; font-size: 14.5px; line-height: 1.5; color: #000; position: fixed; border:1px solid #99f'>"
-	    + msg + "<span style='font-size:9pt;'>&nbsp;(<a href='http://jobhelper.g0v.ronny.tw/'>"+decodeURIComponent('%E6%B1%82%E8%81%B7%E5%B0%8F%E5%B9%AB%E6%89%8BIE%E7%89%88')+"</a> Ver " + appAPI.appInfo.version + ")</span></div>";
+	    + msg + "&nbsp;[<a id='jobhelper_cc' href='http://jobhelper.g0v.ronny.tw/index/setpackage' target='_blank'>"+decodeURIComponent('%E8%A8%AD%E5%AE%9A')+"</a>]&nbsp;<span style='font-size:9pt;'>&nbsp;(<a href='http://jobhelper.g0v.ronny.tw/'>"+decodeURIComponent('%E6%B1%82%E8%81%B7%E5%B0%8F%E5%B9%AB%E6%89%8BIE%E7%89%88')+"</a> Ver " + appAPI.appInfo.version + ")</span></div>";
 	    document.body.innerHTML = content + document.body.innerHTML;
     }
+    add_cc();
 };
 
 /*
@@ -221,7 +222,6 @@ var show_info=function(msg){
 */
 var update_list=function(){
 	var last_update=appAPI.db.get('last_update');
-
 	if(last_update===null||last_update<appAPI.time.now()){
         appAPI.request.get({
             url:"http://jobhelper.g0v.ronny.tw/api/getpackages",
@@ -229,21 +229,22 @@ var update_list=function(){
                 pkg_list=appAPI.JSON.parse(res);
                 var list='';
                 for(var pkg in pkg_list.packages){
-                    if(pkg_list.packages[pkg]['default']===true){
-                        list=list+pkg_list.packages[pkg].id+",";
-                        appAPI.db.set('pkg_name_'+pkg_list.packages[pkg].id,pkg_list.packages[pkg].name);
-                    }
+                    appAPI.db.set('pkg_name_'+pkg_list.packages[pkg].id,pkg_list.packages[pkg].name);
                 }
-                
-                //alert('next list update:' + appAPI.time.daysFromNow(1));
                 appAPI.db.set('last_update',appAPI.time.daysFromNow(1));
-                appAPI.db.set('pkg_list',list);
-            },
-            onFailure: function(httpCode) {
-                //alert('Failed to loading package list.'+httpCode);
             }
         });	
 	}
+};
+
+/*
+清除快取資料
+*/
+var add_cc=function(){
+	jQuery('#jobhelper_cc').click(function(){
+		//alert('clear cache');
+		appAPI.db.async.removeAll();
+	});
 };
 
 /*
@@ -270,22 +271,15 @@ var search_comp = function(comp_name){
     var pkg_list=appAPI.db.get('pkg_list');
     var rt=null;
     appAPI.request.get({
-        url:"http://jobhelper.g0v.ronny.tw/api/search?name="+name_filter(comp_name)+"&packages="+pkg_list,
+        url:"http://jobhelper.g0v.ronny.tw/api/search?name="+name_filter(comp_name)+"&packages=cookie",
         onSuccess:function(res,val){
             rt=appAPI.JSON.parse(res);
-            push_data(rt);
-            try{
-                if(rt.data[0].name!==undefined){
-                    appAPI.db.async.set(comp_name,rt,appAPI.time.daysFromNow(3));
-                }else{
-                    show_info();//not found any data
-                }
-            }catch(err){
-            	/*
-            	安裝後第一次執行會不正常因為pkg_list是null的狀態,待列表抓取完成後就會好了(重新整理頁面即可)
-                show_info(err);
-                */
+            if(rt.data.length===0){
+                show_info();
+                return;
             }
+            push_data(rt);
+            appAPI.db.async.set(comp_name,rt,appAPI.time.daysFromNow(3));
         },
         onFailure:function(httCode) {
             show_msg(decodeURIComponent('%E7%9B%AE%E5%89%8D%E5%B0%8F%E5%B9%AB%E6%89%8B%E6%9C%8D%E5%8B%99%E6%9C%89%E4%BA%9B%E5%95%8F%E9%A1%8C%EF%BC%8C%E8%AB%8B%E7%A8%8D%E5%80%99%E5%86%8D%E8%A9%A6%EF%BC%81'));
